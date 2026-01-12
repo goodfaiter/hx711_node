@@ -14,8 +14,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 ## Install python dependencies
-RUN pip3 install hx711 RPi.GPIO
-
+RUN pip3 install gpiod
+    
 COPY ros_entrypoint.sh /ros_entrypoint.sh
 
 WORKDIR /colcon_ws

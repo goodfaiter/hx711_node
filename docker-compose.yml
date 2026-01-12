@@ -1,17 +1,12 @@
 services:
-  hx711_node:
+  dev:
     image: hx711_node:humble
     build:
       context: .
       dockerfile: Dockerfile
-    restart: always
-    network_mode: "host"
-    ipc: host
-    pid: host
-    devices:
-      - /dev/gpiomem
-    privileged: true
+    volumes:
+      - ./:/workspace
     environment:
       - UID=${HOST_UID}
       - ROS_DOMAIN_ID
-    command: su - ros --whitelist-environment=ROS_DOMAIN_ID /run.sh
+    command: tail -f /dev/null

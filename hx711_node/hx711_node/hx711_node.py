@@ -3,8 +3,7 @@
 import rclpy
 from rclpy.node import Node
 from std_msgs.msg import Float32
-import RPi.GPIO as GPIO
-from hx711 import HX711
+from .hx711 import HX711
 import time
 
 class HX711WeightSensor(Node):
@@ -26,34 +25,28 @@ class HX711WeightSensor(Node):
         # Initialize HX711
         self.hx711 = None
         self.zero_offset = 0.0
+
+        self.get_logger().info("Initializing HX711 weight sensor...")
         
-        try:
-            self.get_logger().info("Initializing HX711 weight sensor...")
-            
-            # Create HX711 instance
-            self.hx711 = HX711(
-                dout_pin=self.dout_pin,
-                pd_sck_pin=self.pd_sck_pin,
-                channel=self.channel,
-                gain=self.gain
-            )
-            
-            # Reset the HX711
-            self.hx711.reset()
-            time.sleep(0.1)
-            
-            # Perform tare/zero calibration at startup
-            self.perform_tare()
-            
-            self.get_logger().info("HX711 initialized successfully")
-            
-            # Start publishing timer
-            self.timer = self.create_timer(1.0 / self.sample_rate, self.publish_weight)
-            
-        except Exception as e:
-            self.get_logger().error(f"Failed to initialize HX711: {e}")
-            self.destroy_node()
-            rclpy.shutdown()
+        # Create HX711 instance
+        self.hx711 = HX711(
+            dout_pin=self.dout_pin,
+            pd_sck_pin=self.pd_sck_pin,
+            channel=self.channel,
+            gain=self.gain
+        )
+        
+        # Reset the HX711
+        self.hx711.reset()
+        time.sleep(0.1)
+        
+        # Perform tare/zero calibration at startup
+        self.perform_tare()
+        
+        self.get_logger().info("HX711 initialized successfully")
+        
+        # Start publishing timer
+        self.timer = self.create_timer(1.0 / self.sample_rate, self.publish_weight)
     
     def perform_tare(self):
         """Perform tare operation to zero the scale at startup"""
@@ -125,15 +118,19 @@ class HX711WeightSensor(Node):
     def destroy_node(self):
         """Cleanup on shutdown"""
         self.get_logger().info("Shutting down HX711 weight sensor")
-        GPIO.cleanup()
         super().destroy_node()
 
 def main(args=None):
     rclpy.init(args=args)
-    node = HX711WeightSensor()
-    rclpy.spin(node)
-    node.destroy_node()
-    rclpy.shutdown()
+
+    try:
+        node = HX711WeightSensor()
+        rclpy.spin(node)
+    except Exception as e:
+        print(f"Error: {e}")
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()
 
 if __name__ == '__main__':
     main()
