@@ -64,16 +64,12 @@ class HX711(object):
         logging.info(f"Opened GPIO chip at {gpiochip}")
 
         # Request lines with appropriate direction
-        self._pd_sck_line = gpiod.request_lines(
+        self._lines = gpiod.request_lines(
             gpiochip,
-            consumer="hx711_pd_sck",
-            config={self._pd_sck_pin: gpiod.LineSettings(direction=Direction.OUTPUT, output_value=Value.INACTIVE)},
-        )
-
-        self._dout_line = gpiod.request_lines(
-            gpiochip,
-            consumer="hx711_dout",
-            config={self._dout_pin: gpiod.LineSettings(direction=Direction.INPUT, output_value=Value.INACTIVE)},
+            consumer="hx711",
+            config={self._pd_sck_pin: gpiod.LineSettings(direction=Direction.OUTPUT, output_value=Value.INACTIVE),
+                    self._dout_pin: gpiod.LineSettings(direction=Direction.INPUT, output_value=Value.INACTIVE),
+            },
         )
 
         self.channel = channel
@@ -84,10 +80,8 @@ class HX711(object):
         Cleanup GPIO lines when object is destroyed
         """
         try:
-            if hasattr(self, "_pd_sck_line"):
-                self._pd_sck_line.release()
-            if hasattr(self, "_dout_line"):
-                self._dout_line.release()
+            if hasattr(self, "_lines"):
+                self._lines.release()
             if hasattr(self, "_chip"):
                 self._chip.close()
         except Exception as e:
@@ -130,8 +124,8 @@ class HX711(object):
         : return: always True
         :rtype bool
         """
-        self._pd_sck_line.set_value(Value.INACTIVE)
-        self._pd_sck_line.set_value(Value.ACTIVE)
+        self._lines.set_value(self._pd_sck_pin, Value.INACTIVE)
+        self._lines.set_value(self._pd_sck_pin, Value.ACTIVE)
         time.sleep(0.01)
         return True
 
@@ -142,7 +136,7 @@ class HX711(object):
         :return: always True
         :rtype bool
         """
-        self._pd_sck_line.set_value(Value.INACTIVE)
+        self._lines.set_value(self._pd_sck_pin, Value.INACTIVE)
         time.sleep(0.01)
         return True
 
@@ -214,7 +208,7 @@ class HX711(object):
         :rtype bool
         """
 
-        _is_ready = self._dout_line.get_value() == 0
+        _is_ready = self._lines.get_value(self._dout_pin) == 0
         logging.debug("check data ready for reading:  {result}".format(result="YES" if _is_ready is True else "NO"))
         return _is_ready
 
@@ -235,8 +229,8 @@ class HX711(object):
         for _ in range(num):
             logging.debug("_set_channel_gain called")
             start_counter = time.perf_counter()  # start timer now.
-            self._pd_sck_line.set_value(Value.ACTIVE)  # set high
-            self._pd_sck_line.set_value(Value.INACTIVE)  # set low
+            self._lines.set_value(self._pd_sck_pin, Value.ACTIVE)  # set high
+            self._lines.set_value(self._pd_sck_pin, Value.INACTIVE)  # set low
             end_counter = time.perf_counter()  # stop timer
             time_elapsed = float(end_counter - start_counter)
             # check if HX711 did not turn off...
@@ -260,7 +254,7 @@ class HX711(object):
         :rtype:  int
         """
         # start by pulling the clock line low
-        self._pd_sck_line.set_value(Value.INACTIVE)
+        self._lines.set_value(self._pd_sck_pin, Value.INACTIVE)
         # init the counter
         ready_counter = 0
 
@@ -281,8 +275,8 @@ class HX711(object):
             # start timer
             start_counter = time.perf_counter()
             # request next bit from HX711
-            self._pd_sck_line.set_value(Value.ACTIVE)
-            self._pd_sck_line.set_value(Value.INACTIVE)
+            self._lines.set_value(self._pd_sck_pin, Value.ACTIVE)
+            self._lines.set_value(self._pd_sck_pin, Value.INACTIVE)
             # stop timer
             end_counter = time.perf_counter()
             time_elapsed = float(end_counter - start_counter)
@@ -295,7 +289,7 @@ class HX711(object):
 
             # Shift the bits in to data_in variable.
             # Left shift by one bit then bitwise OR with the new bit.
-            data_in = (data_in << 1) | self._dout_line.get_value()
+            data_in = (data_in << 1) | self._lines.get_value(self._dout_pin)
 
         if self.channel == "A" and self.channel_a_gain == 128:
             self._set_channel_gain(num=1)  # send one bit
