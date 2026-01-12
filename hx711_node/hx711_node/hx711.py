@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 import gpiod
-from gpiod.line import Direction, Value, Line
+from gpiod.line import Direction, Value
 import time
 import logging
 
