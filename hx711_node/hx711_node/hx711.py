@@ -60,16 +60,18 @@ class HX711(object):
 
         # Open GPIO chip
         self._chip = gpiod.Chip(gpiochip)
+        
+        logging.info(f"Opened GPIO chip at {gpiochip}")
 
         # Request lines with appropriate direction
         self._pd_sck_line = gpiod.request_lines(
-            self._chip,
+            gpiochip,
             consumer="hx711_pd_sck",
             config={self._pd_sck_pin: gpiod.LineSettings(direction=Direction.OUTPUT, output_value=Value.INACTIVE)},
         )
 
         self._dout_line = gpiod.request_lines(
-            self._chip,
+            gpiochip,
             consumer="hx711_dout",
             config={self._dout_pin: gpiod.LineSettings(direction=Direction.INPUT, output_value=Value.INACTIVE)},
         )
