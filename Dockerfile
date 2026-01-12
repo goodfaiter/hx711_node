@@ -11,6 +11,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     python3-colcon-common-extensions \
     python3-pip \
+    git \
     && rm -rf /var/lib/apt/lists/*
 
 ## Install python dependencies

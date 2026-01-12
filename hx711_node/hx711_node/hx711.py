@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 import gpiod
-from gpiod.line import Direction, Value
+from gpiod.line import Direction, Value, Line
 import time
 import logging
 
@@ -59,12 +59,25 @@ class HX711(object):
         self._chip = gpiod.Chip(gpiochip)
         
         # Request lines with appropriate direction
-        self._pd_sck_line = self._chip.get_line(self._pd_sck_pin)
-        self._dout_line = self._chip.get_line(self._dout_pin)
-        
-        # Configure lines
-        self._pd_sck_line.request(consumer="HX711", type=gpiod.LINE_REQ_DIR_OUT)
-        self._dout_line.request(consumer="HX711", type=gpiod.LINE_REQ_DIR_IN)
+        self._pd_sck_line = gpiod.request_lines(
+            self._chip,
+            consumer="hx711_pd_sck",
+            config={
+                self._pd_sck_pin: gpiod.LineSettings(
+                    direction=Direction.OUTPUT, output_value=Value.INACTIVE
+                )
+            }
+        )
+
+        self._dout_line = gpiod.request_lines(
+            self._chip,
+            consumer="hx711_dout",
+            config={
+                self._dout_pin: gpiod.LineSettings(
+                    direction=Direction.INPUT, output_value=Value.INACTIVE
+                )
+            }
+        )
         
         self. channel = channel
         self.channel_a_gain = gain
@@ -121,8 +134,8 @@ class HX711(object):
         : return: always True
         :rtype bool
         """
-        self._pd_sck_line.set_value(0)
-        self._pd_sck_line.set_value(1)
+        self._pd_sck_line.set_value(Value.INACTIVE)
+        self._pd_sck_line.set_value(Value.ACTIVE)
         time.sleep(0.01)
         return True
 
@@ -133,7 +146,7 @@ class HX711(object):
         :return: always True
         :rtype bool
         """
-        self._pd_sck_line.set_value(0)
+        self._pd_sck_line.set_value(Value.INACTIVE)
         time.sleep(0.01)
         return True
 
@@ -234,8 +247,8 @@ class HX711(object):
         for _ in range(num):
             logging.debug("_set_channel_gain called")
             start_counter = time.perf_counter()  # start timer now. 
-            self._pd_sck_line. set_value(1)  # set high
-            self._pd_sck_line.set_value(0)  # set low
+            self._pd_sck_line. set_value(Value.ACTIVE)  # set high
+            self._pd_sck_line.set_value(Value.INACTIVE)  # set low
             end_counter = time.perf_counter()  # stop timer
             time_elapsed = float(end_counter - start_counter)
             # check if HX711 did not turn off... 
@@ -262,7 +275,7 @@ class HX711(object):
         :rtype:  int
         """
         # start by pulling the clock line low
-        self._pd_sck_line.set_value(0)
+        self._pd_sck_line.set_value(Value.INACTIVE)
         # init the counter
         ready_counter = 0
 
@@ -283,8 +296,8 @@ class HX711(object):
             # start timer
             start_counter = time. perf_counter()
             # request next bit from HX711
-            self._pd_sck_line.set_value(1)
-            self._pd_sck_line. set_value(0)
+            self._pd_sck_line.set_value(Value.ACTIVE)
+            self._pd_sck_line. set_value(Value.INACTIVE)
             # stop timer
             end_counter = time.perf_counter()
             time_elapsed = float(end_counter - start_counter)
