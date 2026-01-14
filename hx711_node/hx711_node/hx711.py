@@ -33,7 +33,7 @@ class HX711(object):
     min_measures = 2
     max_measures = 100
 
-    def __init__(self, dout_pin, pd_sck_pin, gain=128, channel="A", gpiochip="/dev/gpiochip0"):
+    def __init__(self, dout_pin, pd_sck_pin, gain=128, channel="A", chip_path="/dev/gpiochip0"):
         """
         :param dout_pin: GPIO DOUT is connected to
         :type dout_pin:  int
@@ -46,31 +46,18 @@ class HX711(object):
         : param gpiochip: path to GPIO chip device (default: /dev/gpiochip0)
         :type gpiochip: str
         """
-        if isinstance(dout_pin, int) and isinstance(pd_sck_pin, int):  # just check of it is integer
-            self._pd_sck_pin = pd_sck_pin  # init pd_sck pin number
-            self._dout_pin = dout_pin  # init data pin number
-        else:
-            raise TypeError(
-                "dout_pin and pd_sck_pin have to be integer numbers.\nI have got dout_pin: "
-                + str(dout_pin)
-                + " and pd_sck_pin: "
-                + str(pd_sck_pin)
-                + "\n"
-            )
+        self._dout_pin = dout_pin
+        self._pd_sck_pin = pd_sck_pin
 
-        # Open GPIO chip
-        self._chip = gpiod.Chip(gpiochip)
-        
-        logging.info(f"Opened GPIO chip at {gpiochip}")
-
-        # Request lines with appropriate direction
-        self._lines = gpiod.request_lines(
-            gpiochip,
-            consumer="hx711",
-            config={self._pd_sck_pin: gpiod.LineSettings(direction=Direction.OUTPUT, output_value=Value.INACTIVE),
+        with gpiod.Chip(chip_path) as chip:
+            self._lines = gpiod.request_lines(
+                chip_path,
+                consumer="hx711",
+                config={
                     self._dout_pin: gpiod.LineSettings(direction=Direction.INPUT, output_value=Value.INACTIVE),
-            },
-        )
+                    self._pd_sck_pin: gpiod.LineSettings(direction=Direction.OUTPUT, output_value=Value.INACTIVE),
+                },
+            )
 
         self.channel = channel
         self.channel_a_gain = gain
@@ -289,7 +276,7 @@ class HX711(object):
 
             # Shift the bits in to data_in variable.
             # Left shift by one bit then bitwise OR with the new bit.
-            data_in = (data_in << 1) | self._lines.get_value(self._dout_pin)
+            data_in = (data_in << 1) | (1 if self._lines.get_value(self._dout_pin) == Value.ACTIVE else 0)
 
         if self.channel == "A" and self.channel_a_gain == 128:
             self._set_channel_gain(num=1)  # send one bit
