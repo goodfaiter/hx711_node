@@ -2,9 +2,6 @@
 import gpiod
 from gpiod.line import Direction, Value
 import time
-import logging
-
-logger = logging.getLogger(__name__)
 
 # __author__ = """Marco Roose"""
 # __email__ = 'marco.roose@gmx.de'
@@ -30,10 +27,10 @@ class HX711(object):
     _valid_gains_for_channel_A = [64, 128]
     # define the minimum and maximum count for measures for an aggregated measure
     # this prevents the function from running for too long
-    min_measures = 2
+    min_measures = 1
     max_measures = 100
 
-    def __init__(self, dout_pin, pd_sck_pin, gain=128, channel="A", chip_path="/dev/gpiochip0"):
+    def __init__(self, dout_pin, pd_sck_pin, gain=128, channel="A", chip_path="/dev/gpiochip0", logger = None):
         """
         :param dout_pin: GPIO DOUT is connected to
         :type dout_pin:  int
@@ -48,6 +45,9 @@ class HX711(object):
         """
         self._dout_pin = dout_pin
         self._pd_sck_pin = pd_sck_pin
+        self._logger = logger
+
+        self._logger.info("Initializing HX711 on DOUT pin {dout} and PD_SCK pin {pd_sck}".format(dout=self._dout_pin, pd_sck=self._pd_sck_pin))
 
         with gpiod.Chip(chip_path) as chip:
             self._lines = gpiod.request_lines(
@@ -59,6 +59,8 @@ class HX711(object):
                 },
             )
 
+        self._logger.info("Initialized HX711 on DOUT pin {dout} and PD_SCK pin {pd_sck}".format(dout=self._dout_pin, pd_sck=self._pd_sck_pin))
+
         self.channel = channel
         self.channel_a_gain = gain
 
@@ -66,19 +68,7 @@ class HX711(object):
         """
         Cleanup GPIO lines when object is destroyed
         """
-        try:
-            if hasattr(self, "_lines"):
-                self._lines.release()
-            if hasattr(self, "_chip"):
-                self._chip.close()
-        except Exception as e:
-            logging.warning(f"Error during cleanup: {e}")
-
-    def cleanup(self):
-        """
-        Manually cleanup GPIO resources
-        """
-        self.__del__()
+        self._lines.release()
 
     @property
     def channel(self):
@@ -101,7 +91,7 @@ class HX711(object):
             self._channel_a_gain = channel_a_gain
             self._apply_setting()
         else:
-            logging.warning(
+            self._logger.warn(
                 """current channel != "A" so no need to set the gain""" """ current channel is '{channel}'""".format(channel=self.channel)
             )
 
@@ -135,11 +125,11 @@ class HX711(object):
         :rtype bool
         : raises GenericHX711Exception
         """
-        logging.debug("power down")
+        self._logger.debug("power down")
         self.power_down()
-        logging.debug("power up")
+        self._logger.debug("power up")
         self.power_up()
-        logging.debug("read some raw data")
+        self._logger.debug("read some raw data")
         result = self.get_raw_data(6)
         if result is False:
             raise GenericHX711Exception("failed to reset HX711")
@@ -195,8 +185,8 @@ class HX711(object):
         :rtype bool
         """
 
-        _is_ready = self._lines.get_value(self._dout_pin) == 0
-        logging.debug("check data ready for reading:  {result}".format(result="YES" if _is_ready is True else "NO"))
+        _is_ready = self._lines.get_value(self._dout_pin) == Value.INACTIVE
+        self._logger.debug("check data ready for reading:  {result}".format(result="YES" if _is_ready is True else "NO"))
         return _is_ready
 
     def _set_channel_gain(self, num):
@@ -214,7 +204,7 @@ class HX711(object):
             raise AttributeError(""""num" has to be in the range of 1 to 3""")
 
         for _ in range(num):
-            logging.debug("_set_channel_gain called")
+            self._logger.debug("_set_channel_gain called")
             start_counter = time.perf_counter()  # start timer now.
             self._lines.set_value(self._pd_sck_pin, Value.ACTIVE)  # set high
             self._lines.set_value(self._pd_sck_pin, Value.INACTIVE)  # set low
@@ -223,7 +213,7 @@ class HX711(object):
             # check if HX711 did not turn off...
             # if pd_sck pin is HIGH for 60µs or more the HX 711 enters power down mode.
             if time_elapsed >= 0.00006:
-                logging.warning("setting gain and channel took more than 60µs. " "Time elapsed: {:0.8f}".format(time_elapsed))
+                self._logger.warn("setting gain and channel took more than 60µs. " "Time elapsed: {:0.8f}".format(time_elapsed))
                 # hx711 has turned off.  First few readings are inaccurate.
                 # Despite this reading was ok and data can be used.
                 result = self.get_raw_data(times=6)  # set for the next reading.
@@ -248,17 +238,17 @@ class HX711(object):
         # loop until HX711 is ready
         # halt when maximum number of tries is reached
         while self._ready() is False:
-            time.sleep(0.01)  # sleep for 10ms before next try
+            time.sleep(0.0001)  # sleep before next try
             ready_counter += 1  # increment counter
             # check loop count
             # and stop when defined maximum is reached
             if ready_counter >= max_tries:
-                logging.debug("self._read() not ready after 40 trials\n")
+                self._logger.debug("self._read() not ready after 40 trials\n")
                 return False
 
         data_in = 0  # 2's complement data from hx 711
         # read first 24 bits of data
-        for i in range(24):
+        for _ in range(24):
             # start timer
             start_counter = time.perf_counter()
             # request next bit from HX711
@@ -271,7 +261,7 @@ class HX711(object):
             # check if the hx711 did not turn off:
             # if pd_sck pin is HIGH for 60 us or more than the HX711 enters power down mode.
             if time_elapsed >= 0.00006:
-                logging.debug("Reading data took longer than 60µs. Time elapsed: {:0.8f}".format(time_elapsed))
+                self._logger.debug("Reading data took longer than 60µs. Time elapsed: {:0.8f}".format(time_elapsed))
                 return False
 
             # Shift the bits in to data_in variable.
@@ -285,14 +275,14 @@ class HX711(object):
         else:
             self._set_channel_gain(num=2)  # send two bits
 
-        logging.debug("Binary value as it has come:  " + str(bin(data_in)))
+        self._logger.debug("Binary value as it has come:  " + str(bin(data_in)))
 
         # check if data is valid
         # 0x800000 is the lowest
         # 0x7fffff is the highest possible value from HX711
-        if data_in == 0x7FFFFF or data_in == 0x800000:
-            logging.debug("Invalid data detected:  " + str(data_in))
-            return False
+        # if data_in == 0x7FFFFF or data_in == 0x800000:
+        #     self._logger.debug("Invalid data detected:  " + str(data_in))
+        #     return False
 
         # calculate int from 2's complement
         signed_data = 0
@@ -301,7 +291,7 @@ class HX711(object):
         else:  # else do not do anything the value is positive number
             signed_data = data_in
 
-        logging.debug("Converted 2's complement value: " + str(signed_data))
+        # self._logger.debug("Converted 2's complement value: " + str(signed_data))
 
         return signed_data
 

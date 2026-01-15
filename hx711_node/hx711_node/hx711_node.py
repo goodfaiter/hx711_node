@@ -15,9 +15,9 @@ class HX711WeightSensor(Node):
         self.dout_pin = 17
         self.pd_sck_pin = 21
         self.channel = "A"
-        self.gain = 64
-        self.sample_rate = 10.0  # Hz
-        self.num_samples = 3  # Number of raw readings to average
+        self.gain = 128
+        self.sample_rate = 80.0  # Hz
+        self.num_samples = 1  # Number of raw readings to average
         self.calibration_factor = 1.0  # Adjust this based on your calibration
 
         # Publisher for weight data
@@ -30,7 +30,9 @@ class HX711WeightSensor(Node):
         self.get_logger().info("Initializing HX711 weight sensor...")
 
         # Create HX711 instance
-        self.hx711 = HX711(dout_pin=self.dout_pin, pd_sck_pin=self.pd_sck_pin, channel=self.channel, gain=self.gain)
+        self.hx711 = HX711(
+            dout_pin=self.dout_pin, pd_sck_pin=self.pd_sck_pin, channel=self.channel, gain=self.gain, logger=self.get_logger()
+        )
 
         # Reset the HX711
         self.hx711.reset()
@@ -71,42 +73,12 @@ class HX711WeightSensor(Node):
 
     def get_weight_reading(self):
         """Get current weight reading from HX711"""
-        try:
-            # Get multiple raw measurements
-            raw_data = self.hx711.get_raw_data(times=self.num_samples)
-
-            if not raw_data:
-                return 0.0
-
-            # Filter out None values and average
-            valid_data = [x for x in raw_data if x is not None]
-            if not valid_data:
-                return 0.0
-
-            raw_average = sum(valid_data) / len(valid_data)
-
-            # Convert to weight: (raw - offset) / calibration_factor
-            weight = (raw_average - self.zero_offset) / self.calibration_factor
-
-            return weight
-
-        except Exception as e:
-            self.get_logger().error(f"Error reading from HX711: {e}")
-
-            # Try to reset and recover
-            try:
-                self.hx711.reset()
-                time.sleep(0.1)
-            except:
-                pass
-
-            return 0.0
+        raw_data = self.hx711.get_raw_data(times=1)[0]
+        return (raw_data - self.zero_offset) / self.calibration_factor
 
     def publish_weight(self):
         """Publish current weight reading"""
         weight = self.get_weight_reading()
-
-        self.get_logger().info(f"Weight: {weight}")
 
         # Create and publish message
         weight_msg = Float32()
