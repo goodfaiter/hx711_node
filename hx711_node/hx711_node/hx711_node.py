@@ -20,6 +20,9 @@ class HX711WeightSensor(Node):
         self.num_samples = 1  # Number of raw readings to average
         self.calibration_factor = 1.0  # Adjust this based on your calibration
 
+        self.prev_raw_data: int = 0
+        self.rejection_threshold: int = 1000  # Threshold for rejecting sudden changes
+
         # Publisher for weight data
         self.weight_publisher = self.create_publisher(Float32, "weight", 10)
 
@@ -66,6 +69,7 @@ class HX711WeightSensor(Node):
 
         if tare_values:
             self.zero_offset = sum(tare_values) / len(tare_values)
+            self.prev_raw_data = self.zero_offset
             self.get_logger().info(f"Tare complete. Zero offset: {self.zero_offset}")
         else:
             self.get_logger().warn("Could not collect tare samples, using zero offset = 0")
@@ -74,6 +78,9 @@ class HX711WeightSensor(Node):
     def get_weight_reading(self):
         """Get current weight reading from HX711"""
         raw_data = self.hx711.get_raw_data(times=1)[0]
+        if abs(raw_data - self.prev_raw_data) > self.rejection_threshold:
+            raw_data = self.hx711.get_raw_data(times=1)[0]
+        self.prev_raw_data = raw_data
         return (raw_data - self.zero_offset) / self.calibration_factor
 
     def publish_weight(self):
